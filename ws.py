@@ -12,7 +12,7 @@ PASS = ''
 BUFLEN = 4096 * 4
 TIMEOUT = 60
 DEFAULT_HOST = '127.0.0.1:111'
-RESPONSE = 'HTTP/1.1 101 <b><i><font color="blue">Assalamualaikum Kawann</font></b>\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: foo\r\n\r\n'
+RESPONSE = 'HTTP/1.1 101 <b><i><font color="blue">Dinda Putri As Rerechan02</font></b> Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: foo\r\n\r\n'
 
 class Server(threading.Thread):
     def __init__(self, host, port):
@@ -29,7 +29,7 @@ class Server(threading.Thread):
             soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             soc.settimeout(2)
             soc.bind((self.host, int(self.port)))
-            soc.listen(5)  # Allow up to 5 pending connections
+            soc.listen(5)
             self.running = True
 
             while self.running:
@@ -62,7 +62,6 @@ class Server(threading.Thread):
         with self.threadsLock:
             for conn in list(self.threads):
                 conn.close()
-
 
 class ConnectionHandler(threading.Thread):
     def __init__(self, socClient, server, addr):
@@ -177,7 +176,6 @@ class ConnectionHandler(threading.Thread):
             if count >= TIMEOUT:
                 break
 
-
 def print_usage():
     print('Usage: proxy.py -p <port>')
     print('       proxy.py -b <bindAddr> -p <port>')
@@ -199,7 +197,6 @@ def parse_args(argv):
         elif opt in ("-p", "--port"):
             LISTENING_PORT = int(arg)
 
-
 def main():
     print("\n:-------PythonProxy-------:\n")
     print(f"Listening addr: {LISTENING_ADDR}")
@@ -213,7 +210,6 @@ def main():
     except KeyboardInterrupt:
         print('Stopping...')
         server.close()
-
 
 if __name__ == '__main__':
     parse_args(sys.argv[1:])
