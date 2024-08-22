@@ -14,6 +14,8 @@ TIMEOUT = 60
 DEFAULT_HOST = '127.0.0.1:111'
 RESPONSE = 'HTTP/1.1 101 <b><i><font color="blue">Dinda Putri As Rerechan02</font></b> Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: foo\r\n\r\n'
 
+SOCKS_VERSION = 5
+
 class Server(threading.Thread):
     def __init__(self, host, port):
         super().__init__()
@@ -94,32 +96,67 @@ class ConnectionHandler(threading.Thread):
 
     def run(self):
         try:
-            self.client_buffer = self.client.recv(BUFLEN).decode('utf-8')
-            hostPort = self.findHeader(self.client_buffer, 'X-Real-Host')
-
-            if not hostPort:
-                hostPort = DEFAULT_HOST
-
-            split = self.findHeader(self.client_buffer, 'X-Split')
-
-            if split:
-                self.client.recv(BUFLEN)
-
-            passwd = self.findHeader(self.client_buffer, 'X-Pass')
-
-            if len(PASS) != 0 and passwd != PASS:
-                self.client.sendall(b'HTTP/1.1 400 WrongPass!\r\n\r\n')
-            elif len(PASS) != 0 or hostPort.startswith('127.0.0.1') or hostPort.startswith('localhost'):
-                self.method_CONNECT(hostPort)
+            self.client_buffer = self.client.recv(BUFLEN)
+            
+            if self.client_buffer[0] == SOCKS_VERSION:
+                self.handle_socks5()
             else:
-                self.client.sendall(b'HTTP/1.1 403 Forbidden!\r\n\r\n')
-
+                self.handle_http()
         except Exception as e:
             self.log += f' - error: {e}'
             self.server.printLog(self.log)
         finally:
             self.close()
             self.server.removeConn(self)
+
+    def handle_http(self):
+        self.client_buffer = self.client_buffer.decode('utf-8')
+        hostPort = self.findHeader(self.client_buffer, 'X-Real-Host')
+
+        if not hostPort:
+            hostPort = DEFAULT_HOST
+
+        split = self.findHeader(self.client_buffer, 'X-Split')
+
+        if split:
+            self.client.recv(BUFLEN)
+
+        passwd = self.findHeader(self.client_buffer, 'X-Pass')
+
+        if len(PASS) != 0 and passwd != PASS:
+            self.client.sendall(b'HTTP/1.1 400 WrongPass!\r\n\r\n')
+        elif len(PASS) != 0 or hostPort.startswith('127.0.0.1') or hostPort.startswith('localhost'):
+            self.method_CONNECT(hostPort)
+        else:
+            self.client.sendall(b'HTTP/1.1 403 Forbidden!\r\n\r\n')
+
+    def handle_socks5(self):
+        # SOCKS5 handshake
+        self.client.sendall(b"\x05\x00")  # Version 5, No Authentication Required
+
+        # Request details
+        version, cmd, _, address_type = self.client.recv(4)
+        if cmd != 1:  # Only CONNECT command is supported
+            self.close()
+            return
+
+        # Parse address and port based on address type
+        if address_type == 1:  # IPv4
+            address = socket.inet_ntoa(self.client.recv(4))
+        elif address_type == 3:  # Domain name
+            domain_length = self.client.recv(1)[0]
+            address = self.client.recv(domain_length).decode('utf-8')
+        else:
+            self.close()
+            return
+        port = int.from_bytes(self.client.recv(2), 'big')
+
+        self.log += f' - SOCKS5 CONNECT {address}:{port}'
+        self.connect_target(f"{address}:{port}")
+        self.client.sendall(b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")  # SOCKS5 response
+        self.client_buffer = b''
+        self.server.printLog(self.log)
+        self.doCONNECT()
 
     def findHeader(self, headers, header_name):
         headers = headers.split('\r\n')
